@@ -1,168 +1,242 @@
-import streamlit as st
 import re
+from html import escape
+
+import pandas as pd
+import streamlit as st
 from PyPDF2 import PdfReader
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-# Ignore common meaningless words
-ignore_words = {
-    "experience",
-    "work",
-    "worked",
-    "team",
-    "project",
-    "projects",
-    "using",
-    "used",
-    "developer",
-    "application",
-    "system",
-    "data",
-    "year",
-    "years"
-}
-skills_list = {
 
-    # Programming Languages
+st.set_page_config(
+    page_title="Resume Screening",
+    page_icon="📄",
+    layout="wide",
+)
+
+# ----------------------------------------------------------------------------
+# Data
+# ----------------------------------------------------------------------------
+ignore_words = {
+    "experience", "work", "worked", "team", "project", "projects",
+    "using", "used", "developer", "application", "system", "data",
+    "year", "years",
+}
+
+skills_list = {
+    # Programming languages
     "python", "java", "c", "cpp", "csharp", "javascript",
     "typescript", "php", "ruby", "swift", "kotlin",
     "go", "rust", "r", "matlab",
-
-    # Web Development
+    # Web development
     "html", "css", "react", "angular", "vue",
     "nodejs", "express", "django", "flask",
     "streamlit", "bootstrap", "tailwind",
-
     # Databases
     "sql", "mysql", "postgresql", "mongodb",
     "sqlite", "oracle", "firebase",
-
-    # Data Science / AI
+    # Data science / AI
     "machine", "learning", "deep", "tensorflow",
     "keras", "pytorch", "numpy", "pandas",
     "matplotlib", "seaborn", "opencv",
     "nlp", "scikit", "sklearn",
-
     # Cloud / DevOps
     "aws", "azure", "gcp", "docker",
     "kubernetes", "jenkins", "linux",
     "git", "github", "gitlab",
-
-    # BI / Analytics
+    # BI / analytics
     "powerbi", "tableau", "excel",
     "analytics", "visualization",
-
-    # Mobile Development
-    "android", "ios", "flutter",
-    "reactnative",
-
+    # Mobile
+    "android", "ios", "flutter", "reactnative",
     # Cybersecurity
-    "cybersecurity", "penetration",
-    "testing", "networking",
-
-    # Software Engineering
+    "cybersecurity", "penetration", "testing", "networking",
+    # Software engineering
     "oop", "api", "rest", "microservices",
-
-    # General Tech
-    "ai", "ml", "automation",
-    "cloud", "devops"
+    # General tech
+    "ai", "ml", "automation", "cloud", "devops",
 }
 
-# Function to extract text from PDF
+# (minimum score, label, colour)
+VERDICTS = [
+    (80, "Almost perfect match", "#16a34a"),
+    (60, "Excellent match", "#0d9488"),
+    (30, "Good match", "#2563eb"),
+    (10, "Average match", "#d97706"),
+    (0, "Low match", "#dc2626"),
+]
+
+
+def verdict_for(score):
+    for threshold, label, color in VERDICTS:
+        if score >= threshold:
+            return label, color
+    return VERDICTS[-1][1], VERDICTS[-1][2]
+
+
+# ----------------------------------------------------------------------------
+# Text helpers
+# ----------------------------------------------------------------------------
 def extract_text_from_pdf(file):
     text = ""
-
     reader = PdfReader(file)
-
     for page in reader.pages:
         page_text = page.extract_text()
-
         if page_text:
             text += page_text
-
     return text
 
 
-# Function to clean text
 def clean_text(text):
-
     text = text.lower()
+    text = re.sub(r"[^a-zA-Z0-9\s]", " ", text)
+    return re.sub(r"\s+", " ", text)
 
-    text = re.sub(r'[^a-zA-Z0-9\s]', ' ', text)
-
-    text = re.sub(r'\s+', ' ', text)
-
-    return text
 
 def extract_experience(text):
+    matches = re.findall(r"(\d+)\s+years", text)
+    return max(int(n) for n in matches) if matches else 0
 
-    matches = re.findall(r'(\d+)\s+years', text)
 
-    if matches:
-        numbers = [int(num) for num in matches]
-        return max(numbers)
+def split_skills(job_words, resume_words):
+    """Return (matched, missing) skills, matching whole words only."""
+    required = sorted(skills_list & job_words)
+    matched = [s for s in required if s in resume_words]
+    missing = [s for s in required if s not in resume_words]
+    return matched, missing
 
-    return 0
 
-def calculate_skill_match_score(job_desc_text, resume_text, skills_set):
-    """Calculate what percentage of required skills are present in resume"""
-    
-    # Extract skills that appear in job description
-    job_lower = job_desc_text.lower()
-    required_skills_found = []
-    
-    for skill in skills_set:
-        if skill in job_lower:
-            required_skills_found.append(skill)
-    
-    if not required_skills_found:
-        return 100  # No specific skills required in JD
-    
-    # Count how many required skills are in resume
-    resume_lower = resume_text.lower()
-    matched_count = 0
-    
-    for skill in required_skills_found:
-        # Use word boundary to avoid partial matches (e.g., "java" in "javascript")
-        if re.search(r'\b' + re.escape(skill) + r'\b', resume_lower):
-            matched_count += 1
-    
-    skill_score = (matched_count / len(required_skills_found)) * 100
-    return skill_score
-
-# Page Title
+# ----------------------------------------------------------------------------
+# Styling
+# ----------------------------------------------------------------------------
 st.markdown(
-    "<h1 style='color:red; text-align:center;'>AI RESUME SCREENING SYSTEM</h1>",
-    unsafe_allow_html=True
+    """
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&display=swap');
+
+html, body, [class*="css"], .stMarkdown, .stButton button, label {
+    font-family: 'Manrope', system-ui, sans-serif;
+}
+.block-container { max-width: 1100px; padding-top: 2.5rem; padding-bottom: 4rem; }
+
+.app-title { font-size: 2.1rem; font-weight: 800; letter-spacing: -0.02em; margin: 0; }
+.app-sub   { opacity: .7; margin: .25rem 0 1.75rem; font-size: 1.02rem; max-width: 60ch; }
+
+.section-title { font-size: 1.05rem; font-weight: 700; margin: 0 0 .25rem; }
+.section-hint  { opacity: .65; font-size: .9rem; margin-bottom: .75rem; }
+
+/* Primary button */
+.stButton button[kind="primary"] {
+    background: #4f46e5; border: 0; font-weight: 700;
+    padding: .7rem 1rem; border-radius: 10px;
+}
+.stButton button[kind="primary"]:hover { background: #4338ca; }
+
+/* Candidate header */
+.cand { display: flex; align-items: center; gap: 1.1rem; margin-bottom: .75rem; }
+.cand-rank { font-size: .85rem; opacity: .6; font-weight: 700; }
+.cand-name { font-size: 1.15rem; font-weight: 800; line-height: 1.25; word-break: break-word; }
+.ring {
+    --size: 76px;
+    width: var(--size); height: var(--size); flex: none;
+    border-radius: 50%;
+    background: conic-gradient(var(--c) calc(var(--p) * 1%), rgba(128,128,128,.22) 0);
+    display: grid; place-items: center; position: relative;
+    font-weight: 800; font-size: 1.05rem;
+}
+.ring::before {
+    content: ""; position: absolute; inset: 7px; border-radius: 50%;
+    background: var(--bg, #0e1117);
+}
+.ring span { position: relative; }
+.pill {
+    display: inline-block; margin-top: .3rem; padding: .15rem .65rem;
+    border-radius: 999px; font-size: .8rem; font-weight: 700;
+    color: var(--c); background: color-mix(in srgb, var(--c) 16%, transparent);
+}
+
+/* Skill chips */
+.chips-label { font-size: .85rem; font-weight: 700; margin: .9rem 0 .35rem; opacity: .8; }
+.chip {
+    display: inline-block; padding: .2rem .65rem; margin: 0 .35rem .35rem 0;
+    border-radius: 6px; font-size: .84rem; font-weight: 500;
+}
+.chip.hit  { background: rgba(22,163,74,.16);  color: #22c55e; }
+.chip.miss { background: rgba(220,38,38,.16);  color: #f87171; }
+.chip.none { background: rgba(128,128,128,.15); }
+
+[data-testid="stMetricValue"] { font-weight: 800; }
+</style>
+""",
+    unsafe_allow_html=True,
 )
 
-st.markdown("<hr>", unsafe_allow_html=True)
 
-# Job Description
-st.markdown("<h3>📌 JOB DESCRIPTION</h3>", unsafe_allow_html=True)
+def chips(items, kind, empty_text):
+    if not items:
+        return f'<span class="chip none">{escape(empty_text)}</span>'
+    return "".join(f'<span class="chip {kind}">{escape(i)}</span>' for i in items)
 
-# Job Role
-job_role = st.text_input("💼 Job Role")
 
-# Required Skills
-required_skills = st.text_area(
-    "🛠 Required Skills",
-    placeholder="Example: Python, SQL, Machine Learning, AWS"
+# ----------------------------------------------------------------------------
+# Header
+# ----------------------------------------------------------------------------
+st.markdown('<p class="app-title">Resume screening</p>', unsafe_allow_html=True)
+st.markdown(
+    '<p class="app-sub">Describe the role, upload resumes as PDFs, and get '
+    "candidates ranked by how well they match.</p>",
+    unsafe_allow_html=True,
 )
 
-# Qualifications
-qualifications = st.text_area(
-    "🎓 Qualifications",
-    placeholder="Example: B.Tech in Computer Science, 2+ years experience"
-)
+# ----------------------------------------------------------------------------
+# Inputs
+# ----------------------------------------------------------------------------
+left, right = st.columns([3, 2], gap="large")
 
-experience_required = st.number_input(
-    "📅 Minimum Experience Required (Years)",
-    min_value=0,
-    max_value=50,
-    value=0
-)
+with left:
+    with st.container(border=True):
+        st.markdown('<p class="section-title">Job description</p>', unsafe_allow_html=True)
+        st.markdown(
+            '<p class="section-hint">The more specific the skills, the better the ranking.</p>',
+            unsafe_allow_html=True,
+        )
 
-# Full Job Description
+        job_role = st.text_input("Job role", placeholder="e.g. Data Analyst")
+
+        required_skills = st.text_area(
+            "Required skills",
+            placeholder="Python, SQL, Machine Learning, AWS",
+            height=90,
+        )
+
+        qualifications = st.text_area(
+            "Qualifications",
+            placeholder="B.Tech in Computer Science",
+            height=90,
+        )
+
+        experience_required = st.number_input(
+            "Minimum experience (years)",
+            min_value=0,
+            max_value=50,
+            value=0,
+        )
+
+with right:
+    with st.container(border=True):
+        st.markdown('<p class="section-title">Resumes</p>', unsafe_allow_html=True)
+        st.markdown(
+            '<p class="section-hint">PDF only. Upload as many as you need.</p>',
+            unsafe_allow_html=True,
+        )
+        uploaded_files = st.file_uploader(
+            "Upload resumes",
+            type=["pdf"],
+            accept_multiple_files=True,
+            label_visibility="collapsed",
+        )
+        if uploaded_files:
+            st.caption(f"{len(uploaded_files)} resume(s) ready")
+
 job_desc = f"""
 Job Role:
 {job_role}
@@ -177,208 +251,164 @@ Minimum Experience Required:
 {experience_required} years
 """
 
-# Upload Resume PDFs
-st.markdown("<h3>📂 UPLOAD RESUMES</h3>", unsafe_allow_html=True)
+st.write("")
+rank_button = st.button("Rank candidates", type="primary", use_container_width=True)
 
-uploaded_files = st.file_uploader(
-    "Select PDF files",
-    type=["pdf"],
-    accept_multiple_files=True
-)
-
-# Success Message
-if uploaded_files:
-    st.success(f"{len(uploaded_files)} file(s) uploaded successfully!")
-
-# Center Button
-col1, col2, col3 = st.columns([1, 2, 1])
-
-with col2:
-    rank_button = st.button(
-        "🔍 RANK CANDIDATES",
-        use_container_width=True
-    )
-
-# Ranking Logic
+# ----------------------------------------------------------------------------
+# Ranking
+# ----------------------------------------------------------------------------
 if rank_button:
+    if not (job_role.strip() or required_skills.strip() or qualifications.strip()):
+        st.error("Add a job role, required skills, or qualifications to compare against.")
+        st.stop()
+    if not uploaded_files:
+        st.error("Upload at least one resume PDF.")
+        st.stop()
 
-    # Validation
-    if not job_desc.strip():
-        st.error("❌ Please enter job description")
-
-    elif not uploaded_files:
-        st.error("❌ Please upload resumes")
-
-    else:
-        st.info("Processing resumes... Please wait")
-
-        resumes = []
-        names = []
-
-        # Extract Resume Text
+    resumes, names = [], []
+    with st.spinner("Reading resumes..."):
         for file in uploaded_files:
-
             try:
-                text = extract_text_from_pdf(file)
-                text = clean_text(text)
-
+                text = clean_text(extract_text_from_pdf(file))
                 if text.strip():
                     resumes.append(text)
                     names.append(file.name)
-
+                else:
+                    st.warning(f"{file.name}: no readable text. Scanned PDFs aren't supported.")
             except Exception:
-                st.warning(f"Could not read {file.name}")
+                st.warning(f"{file.name}: couldn't be opened.")
 
-        # Check if resumes contain text
-        if len(resumes) == 0:
-            st.error("❌ No readable text found in resumes")
+    if not resumes:
+        st.error("None of the uploaded PDFs contained readable text.")
+        st.stop()
 
-        else:
+    cleaned_job_desc = clean_text(job_desc)
+    job_words = set(cleaned_job_desc.split())
 
-            # Combine resumes + job description
-            cleaned_job_desc = clean_text(job_desc)
+    vectorizer = TfidfVectorizer(stop_words="english")
+    tfidf_matrix = vectorizer.fit_transform(resumes + [cleaned_job_desc])
+    similarities = cosine_similarity(tfidf_matrix[-1], tfidf_matrix[:-1])[0]
 
-            documents = resumes + [cleaned_job_desc]
+    results = []
+    for name, sim, resume_text in zip(names, similarities, resumes):
+        resume_words = set(resume_text.split())
+        matched, missing = split_skills(job_words, resume_words)
 
-            # TF-IDF Vectorization
-            vectorizer = TfidfVectorizer(stop_words="english")
+        total_required = len(matched) + len(missing)
+        skill_score = 100 if total_required == 0 else len(matched) / total_required * 100
+        tfidf_percent = sim * 100
+        hybrid = 0.7 * skill_score + 0.3 * tfidf_percent
 
-            tfidf_matrix = vectorizer.fit_transform(documents)
+        results.append(
+            {
+                "name": name,
+                "score": hybrid,
+                "skill_score": skill_score,
+                "tfidf_percent": tfidf_percent,
+                "experience": extract_experience(resume_text),
+                "matched": matched,
+                "missing": missing,
+            }
+        )
 
-            # Cosine Similarity
-            scores = cosine_similarity(
-                tfidf_matrix[-1],
-                tfidf_matrix[:-1]
-            )
+    results.sort(key=lambda r: r["score"], reverse=True)
 
-            # Store Results with Hybrid Scoring
-            results = []
-            for i, (name, tfidf_score, resume_text) in enumerate(zip(names, scores[0], resumes)):
-                
-                # Calculate skill match percentage
-                skill_score = calculate_skill_match_score(cleaned_job_desc, resume_text, skills_list)
-                
-                # Convert TF-IDF to percentage
-                tfidf_percent = tfidf_score * 100
-                
-                # Hybrid: 70% skill match + 30% TF-IDF
-                hybrid_score = (0.7 * skill_score) + (0.3 * tfidf_percent)
-                
-                results.append({
-                    'name': name,
-                    'tfidf_score': tfidf_score,
-                    'tfidf_percent': tfidf_percent,
-                    'skill_score': skill_score,
-                    'hybrid_score': hybrid_score,
-                    'resume_text': resume_text
-                })
-            
-            # Sort by hybrid score descending
-            results.sort(key=lambda x: x['hybrid_score'], reverse=True)
+    # ---------------- Summary ----------------
+    st.write("")
+    st.markdown("## Results")
 
-            # Display Results
+    meets_exp = sum(r["experience"] >= experience_required for r in results)
+    avg_score = sum(r["score"] for r in results) / len(results)
+
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Resumes analyzed", len(results))
+    m2.metric("Top score", f"{results[0]['score']:.0f}%")
+    m3.metric("Average score", f"{avg_score:.0f}%")
+    m4.metric("Meet experience", f"{meets_exp} of {len(results)}")
+
+    # ---------------- Overview table ----------------
+    table = pd.DataFrame(
+        {
+            "Rank": range(1, len(results) + 1),
+            "Candidate": [r["name"] for r in results],
+            "Score": [round(r["score"], 1) for r in results],
+            "Skill match %": [round(r["skill_score"], 1) for r in results],
+            "Text similarity %": [round(r["tfidf_percent"], 1) for r in results],
+            "Experience (yrs)": [r["experience"] for r in results],
+        }
+    )
+
+    st.dataframe(
+        table,
+        hide_index=True,
+        use_container_width=True,
+        column_config={
+            "Score": st.column_config.ProgressColumn(
+                "Score", min_value=0, max_value=100, format="%.0f%%"
+            ),
+        },
+    )
+
+    st.download_button(
+        "Download results (CSV)",
+        table.to_csv(index=False).encode("utf-8"),
+        file_name="resume_ranking.csv",
+        mime="text/csv",
+    )
+
+    # ---------------- Candidate cards ----------------
+    st.write("")
+    st.markdown("### Candidate details")
+
+    for rank, r in enumerate(results, 1):
+        label, color = verdict_for(r["score"])
+        pct = round(r["score"])
+
+        with st.container(border=True):
             st.markdown(
-                "<h2>🏆 RANKING RESULTS</h2>",
-                unsafe_allow_html=True
+                f'<div class="cand">'
+                f'<div class="ring" style="--p:{min(pct, 100)};--c:{color}"><span>{pct}%</span></div>'
+                f"<div>"
+                f'<div class="cand-rank">Rank {rank}</div>'
+                f'<div class="cand-name">{escape(r["name"])}</div>'
+                f'<span class="pill" style="--c:{color}">{label}</span>'
+                f"</div></div>",
+                unsafe_allow_html=True,
             )
 
-            st.markdown("<hr>", unsafe_allow_html=True)
-            top_score = round(results[0]['hybrid_score'], 2)
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Skill match", f"{r['skill_score']:.0f}%")
+            c2.metric("Text similarity", f"{r['tfidf_percent']:.0f}%")
+            c3.metric("Experience found", f"{r['experience']} yrs")
 
-            st.info(f"""
-            📄 Total Resumes Analyzed: {len(results)}
-            🏆 Highest Match Score: {top_score}%
-            """)
+            if r["experience"] >= experience_required:
+                exp_chip = f"Meets the {experience_required}+ year requirement"
+                exp_kind = "hit"
+            else:
+                exp_chip = (
+                    f"Below the {experience_required}+ year requirement "
+                    f"(found {r['experience']})"
+                )
+                exp_kind = "miss"
+            st.markdown(
+                f'<span class="chip {exp_kind}">{escape(exp_chip)}</span>',
+                unsafe_allow_html=True,
+            )
 
-            for i, result in enumerate(results, 1):
-                
-                # Extract values from result dictionary
-                name = result['name']
-                hybrid_score = result['hybrid_score']
-                tfidf_percent = result['tfidf_percent']
-                skill_score = result['skill_score']
-                resume_text = result['resume_text']
-                
-                percent = round(hybrid_score, 2)
-                
-                candidate_experience = extract_experience(resume_text)
+            st.markdown(
+                '<div class="chips-label">Skills found</div>'
+                + chips(r["matched"][:15], "hit", "No required skills found"),
+                unsafe_allow_html=True,
+            )
+            st.markdown(
+                '<div class="chips-label">Skills missing</div>'
+                + chips(r["missing"][:15], "miss", "Nothing missing"),
+                unsafe_allow_html=True,
+            )
 
-                job_words = set(cleaned_job_desc.split())
-
-                resume_words = set(resume_text.split())
-
-                matched_words = job_words.intersection(resume_words)
-
-                matched_words = [
-                    word for word in matched_words
-                    if word not in ignore_words and len(word) > 2
-                    ]
-
-                top_matches = [
-                    word for word in matched_words
-                    if word in skills_list
-                ][:10]
-
-                missing_skills = [
-                    skill for skill in skills_list
-                    if skill in job_words and skill not in resume_words
-                ][:10]
-
-                st.markdown(f"""
-                <div style="
-                    padding:15px;
-                    border-radius:10px;
-                    background-color:#1e1e1e;
-                    border:1px solid #333;
-                    margin-bottom:10px;
-                ">
-                    <h3 style=" color:white;">
-                        🏆 #{i} — {name}
-                    </h3>
-                </div>
-                """, unsafe_allow_html=True)
-
-                st.write(f"**Final Match Score:** {percent}%")
-                
-                # Show score breakdown
-                with st.expander("📊 View Score Breakdown"):
-                    st.write(f"**Skill Match Score:** {round(skill_score, 2)}% (70% weight)")
-                    st.write(f"**TF-IDF Similarity:** {round(tfidf_percent, 2)}% (30% weight)")
-                    st.write(f"**Formula:** (0.7 × {round(skill_score, 2)}) + (0.3 × {round(tfidf_percent, 2)}) = {percent}%")
-
-                st.write(f"**Experience Detected:** {candidate_experience} years")
-
-                if candidate_experience >= experience_required:
-                    st.success("✅ Experience Requirement Met")
-                else:
-                    st.warning("⚠️ Experience Requirement Not Met")
-
-                st.write("**Top Matching Keywords:**")
-
-                if top_matches:
-                    st.write(", ".join(top_matches))
-                else:
-                    st.write("No major skill matches found")
-
-                st.write("**Missing Skills:**")
-
-                if missing_skills:
-                    st.write(", ".join(missing_skills))
-                else:
-                    st.write("No major missing skills")
-
-                if percent >= 80:
-                    st.success("Almost Perfect Match")
-                elif percent >= 60:
-                    st.success("Excellent Match")
-                elif percent >= 30:
-                    st.info("Good Match")
-                elif percent >= 10:
-                    st.warning("Average Match")
-                else:
-                    st.error("Low Match")
-
-                # Progress Bar (using hybrid_score as decimal 0-1)
-                st.progress(hybrid_score / 100)
-
-                st.markdown("<hr>", unsafe_allow_html=True)
+            with st.expander("How this score is calculated"):
+                st.write(
+                    f"Skill match {r['skill_score']:.1f}% × 0.7 + "
+                    f"text similarity {r['tfidf_percent']:.1f}% × 0.3 "
+                    f"= **{r['score']:.1f}%**"
+                )
