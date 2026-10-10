@@ -97,12 +97,24 @@ DISPLAY = {
 
 # (minimum score, label, colour), highest first
 VERDICTS = [
-    (80, "Almost perfect match", "#16a34a"),
-    (60, "Excellent match", "#0d9488"),
-    (30, "Good match", "#2563eb"),
-    (10, "Average match", "#d97706"),
-    (0, "Low match", "#dc2626"),
+    (80, "Almost perfect match", "#22c55e"),
+    (60, "Excellent match", "#2dd4bf"),
+    (30, "Good match", "#60a5fa"),
+    (10, "Average match", "#fbbf24"),
+    (0, "Low match", "#f87171"),
 ]
+
+# Verdict colour -> dot used where only text fits (expander labels)
+DOTS = {"#22c55e": "🟢", "#2dd4bf": "🟢", "#60a5fa": "🔵", "#fbbf24": "🟠", "#f87171": "🔴"}
+
+TOP_CARDS = 3          # candidates shown as full cards; the rest are collapsed
+SHORTLIST_SCORE = 60   # "Excellent match" and above
+
+SORTS = {
+    "Score": lambda c: c.score,
+    "Skill match": lambda c: c.skill_score,
+    "Experience": lambda c: c.experience,
+}
 
 # st.dataframe / st.button switched from use_container_width to width="stretch"
 _VERSION = tuple(int(p) for p in st.__version__.split(".")[:2] if p.isdigit())
@@ -253,61 +265,187 @@ def score_candidates(job_clean: str, resumes: dict[str, str]) -> tuple[list[Cand
 # ----------------------------------------------------------------------------
 # Styling
 # ----------------------------------------------------------------------------
-CSS = """
+CSS_BASE = """
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&family=Space+Grotesk:wght@500;700&display=swap');
 
-html, body, [class*="css"], .stMarkdown, .stButton button, label {
-    font-family: 'Manrope', system-ui, sans-serif;
+:root { --muted: rgba(230,232,245,.62); --line: rgba(255,255,255,.09); --violet: #8b5cf6; --cyan: #22d3ee; }
+
+html, body, .stApp, [class*="css"], .stMarkdown, label, button { font-family: 'Manrope', system-ui, sans-serif; }
+h2, h3, h4 { font-family: 'Space Grotesk', 'Manrope', sans-serif; letter-spacing: -0.02em; }
+
+/* Backdrop: soft glows plus a faint grid that fades out down the page */
+.stApp {
+    background:
+        radial-gradient(900px 520px at 10% -8%, rgba(139,92,246,.24), transparent 60%),
+        radial-gradient(800px 480px at 98% 0%, rgba(34,211,238,.14), transparent 55%),
+        #0b0d17;
 }
-.block-container { max-width: 1100px; padding-top: 2.5rem; padding-bottom: 4rem; }
-
-.app-title { font-size: 2.1rem; font-weight: 800; letter-spacing: -0.02em; margin: 0; }
-.app-sub   { opacity: .7; margin: .25rem 0 1.75rem; font-size: 1.02rem; max-width: 60ch; }
-.section-title { font-size: 1.05rem; font-weight: 700; margin: 0 0 .25rem; }
-.section-hint  { opacity: .65; font-size: .9rem; margin-bottom: .75rem; }
-
-.stButton { width: 100%; }
-.stButton button[kind="primary"] {
-    width: 100%; background: #4f46e5; border: 0; font-weight: 700;
-    padding: .7rem 1rem; border-radius: 10px;
+.stApp::before {
+    content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background-image:
+        linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px);
+    background-size: 48px 48px;
+    -webkit-mask-image: radial-gradient(ellipse at 50% 0%, #000 15%, transparent 72%);
+            mask-image: radial-gradient(ellipse at 50% 0%, #000 15%, transparent 72%);
 }
-.stButton button[kind="primary"]:hover { background: #4338ca; }
+[data-testid="stHeader"] { background: transparent; }
+#MainMenu, footer, [data-testid="stDecoration"] { display: none; }
+.block-container { max-width: 1120px; padding-top: 2rem; padding-bottom: 4rem; position: relative; z-index: 1; }
 
-.cand { display: flex; align-items: center; gap: 1.1rem; margin-bottom: .75rem; }
-.cand-rank { font-size: .85rem; opacity: .6; font-weight: 700; }
-.cand-name { font-size: 1.15rem; font-weight: 800; line-height: 1.25; word-break: break-word; }
+/* Hero */
+.hero { padding: 1.2rem 0 1.6rem; }
+.eyebrow {
+    display: inline-flex; align-items: center; gap: .55rem; padding: .28rem .8rem;
+    border: 1px solid rgba(167,139,250,.35); border-radius: 999px; background: rgba(139,92,246,.1);
+    font-size: .76rem; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: #c4b5fd;
+}
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--cyan); animation: pulse 2s infinite; }
+.hero-title {
+    font-family: 'Space Grotesk', sans-serif; font-weight: 700; letter-spacing: -.03em; line-height: 1.04;
+    font-size: clamp(2.3rem, 5.2vw, 3.5rem); margin: .9rem 0 .7rem;
+    background: linear-gradient(92deg, #fff 8%, #c4b5fd 45%, #67e8f9 92%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.hero-sub { color: var(--muted); max-width: 56ch; font-size: 1.05rem; margin: 0; }
 
-/* Ring is masked, so it works on any theme background */
+/* Glass panels (containers are given keys in the Python code) */
+.st-key-job_panel, .st-key-upload_panel, [class*="st-key-cand_"] {
+    background: linear-gradient(160deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
+    border: 1px solid var(--line); border-radius: 18px; padding: 1.3rem 1.4rem;
+    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+    box-shadow: 0 12px 40px rgba(0,0,0,.35);
+    transition: border-color .25s, box-shadow .25s, transform .25s;
+}
+.st-key-job_panel:hover, .st-key-upload_panel:hover, [class*="st-key-cand_"]:hover {
+    border-color: rgba(139,92,246,.5);
+    box-shadow: 0 0 0 1px rgba(139,92,246,.22), 0 16px 48px rgba(139,92,246,.18);
+    transform: translateY(-2px);
+}
+.st-key-cand_1 {
+    border-color: rgba(139,92,246,.6);
+    background: linear-gradient(160deg, rgba(139,92,246,.16), rgba(34,211,238,.05) 60%, rgba(255,255,255,.02));
+    box-shadow: 0 0 60px rgba(139,92,246,.2), 0 12px 40px rgba(0,0,0,.35);
+}
+[class*="st-key-cand_"] { animation: rise .6s cubic-bezier(.2,.8,.2,1) backwards; }
+
+.panel-title { display: flex; align-items: center; gap: .65rem; font-size: 1.08rem; font-weight: 800; margin: 0 0 .2rem; }
+.num {
+    display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%;
+    font-size: .8rem; font-weight: 800; color: #fff; background: linear-gradient(135deg, #7c3aed, #06b6d4);
+}
+.section-hint { color: var(--muted); font-size: .9rem; margin: 0 0 .8rem 2.3rem; }
+
+/* Inputs */
+[data-baseweb="input"]:focus-within, [data-baseweb="textarea"]:focus-within {
+    box-shadow: 0 0 0 1px var(--violet), 0 0 18px rgba(139,92,246,.35);
+}
+[data-testid="stFileUploaderDropzone"] {
+    background: rgba(255,255,255,.03); border: 1.5px dashed rgba(167,139,250,.45);
+    border-radius: 14px; transition: border-color .25s, background .25s;
+}
+[data-testid="stFileUploaderDropzone"]:hover { border-color: var(--cyan); background: rgba(34,211,238,.05); }
+
+/* Buttons */
+.stButton, [data-testid="stElementContainer"]:has(> .stButton) { width: 100%; }
+.stButton button[kind="primary"], .stButton button[data-testid="stBaseButton-primary"] {
+    width: 100%; color: #fff !important; border: 0; font-weight: 800; letter-spacing: .01em;
+    padding: .85rem 1rem; border-radius: 12px;
+    background: linear-gradient(95deg, #7c3aed, #06b6d4);
+    box-shadow: 0 8px 30px rgba(124,58,237,.35);
+    transition: transform .2s, box-shadow .2s, filter .2s;
+}
+.stButton button[kind="primary"]:hover:not(:disabled), .stButton button[data-testid="stBaseButton-primary"]:hover:not(:disabled) {
+    transform: translateY(-1px); filter: brightness(1.1); box-shadow: 0 12px 38px rgba(34,211,238,.35);
+}
+.stButton button:disabled { opacity: .5; filter: saturate(.35); box-shadow: none; }
+
+/* Candidate header */
+.cand { display: flex; align-items: center; gap: 1.2rem; margin-bottom: .9rem; flex-wrap: wrap; }
+.cand-info { min-width: 0; }
+.cand-rank { display: flex; align-items: center; gap: .55rem; font-size: .8rem; font-weight: 700; color: var(--muted); letter-spacing: .05em; text-transform: uppercase; }
+.cand-name { font-size: 1.2rem; font-weight: 800; line-height: 1.25; word-break: break-word; margin-top: .15rem; }
+
+.rank-badge {
+    display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%;
+    font-size: .8rem; font-weight: 800; color: var(--muted); letter-spacing: 0;
+    background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.14);
+}
+.rank-badge.r1 { color: #1c1303; border: 0; background: linear-gradient(135deg, #fde68a, #f59e0b); box-shadow: 0 0 16px rgba(245,158,11,.5); }
+.rank-badge.r2 { color: #111827; border: 0; background: linear-gradient(135deg, #f3f4f6, #9ca3af); box-shadow: 0 0 14px rgba(209,213,219,.3); }
+.rank-badge.r3 { color: #1f1108; border: 0; background: linear-gradient(135deg, #fdba74, #c2410c); box-shadow: 0 0 14px rgba(234,88,12,.35); }
+
+/* Score ring: masked conic gradient, animates from 0 to the score */
+@property --p { syntax: '<number>'; inherits: false; initial-value: 0; }
+.ring-wrap { position: relative; width: 88px; height: 88px; flex: none; filter: drop-shadow(0 0 8px color-mix(in srgb, var(--c) 55%, transparent)); }
 .ring {
-    width: 76px; height: 76px; flex: none; border-radius: 50%;
-    background: conic-gradient(var(--c) calc(var(--p) * 1%), rgba(128,128,128,.25) 0);
-    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 8px), #000 calc(100% - 7px));
-            mask: radial-gradient(farthest-side, transparent calc(100% - 8px), #000 calc(100% - 7px));
+    --w: 9px; --p: var(--t); position: absolute; inset: 0; border-radius: 50%;
+    background: conic-gradient(var(--c) calc(var(--p) * 1%), rgba(255,255,255,.1) 0);
+    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - var(--w)), #000 calc(100% - var(--w) + 1px));
+            mask: radial-gradient(farthest-side, transparent calc(100% - var(--w)), #000 calc(100% - var(--w) + 1px));
+    animation: fill 1.3s cubic-bezier(.2,.8,.2,1) backwards;
 }
-.ring-wrap { position: relative; width: 76px; height: 76px; flex: none; }
-.ring-wrap .ring { position: absolute; inset: 0; }
-.ring-wrap b { position: absolute; inset: 0; display: grid; place-items: center; font-size: 1.05rem; font-weight: 800; }
+.ring-wrap b { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-family: 'Space Grotesk', sans-serif; font-size: 1.45rem; font-weight: 700; }
+.ring-wrap b small { font-size: .72rem; opacity: .7; margin-left: 1px; }
 
 .pill {
-    display: inline-block; margin-top: .3rem; padding: .15rem .65rem;
-    border-radius: 999px; font-size: .8rem; font-weight: 700;
-    color: color-mix(in srgb, var(--c) 78%, currentColor);
-    background: color-mix(in srgb, var(--c) 16%, transparent);
+    display: inline-block; margin-top: .4rem; padding: .18rem .7rem; border-radius: 999px;
+    font-size: .78rem; font-weight: 800; color: var(--c);
+    background: color-mix(in srgb, var(--c) 14%, transparent);
+    border: 1px solid color-mix(in srgb, var(--c) 35%, transparent);
+}
+.badge {
+    margin-left: .2rem; padding: .12rem .6rem; border-radius: 999px; font-size: .7rem; font-weight: 800;
+    letter-spacing: .06em; color: #fff; background: linear-gradient(95deg, #7c3aed, #06b6d4);
 }
 
-.chips-label { font-size: .85rem; font-weight: 700; margin: .9rem 0 .35rem; opacity: .8; }
-.chip {
-    display: inline-block; padding: .2rem .65rem; margin: 0 .35rem .35rem 0;
-    border-radius: 6px; font-size: .84rem; font-weight: 500;
-}
-.chip.hit  { color: color-mix(in srgb, #16a34a 75%, currentColor); background: rgba(22,163,74,.15); }
-.chip.miss { color: color-mix(in srgb, #dc2626 75%, currentColor); background: rgba(220,38,38,.14); }
-.chip.none { background: rgba(128,128,128,.15); }
+/* Skill chips */
+.chips-label { font-size: .8rem; font-weight: 800; margin: 1rem 0 .4rem; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+.chip { display: inline-block; padding: .22rem .7rem; margin: 0 .4rem .4rem 0; border-radius: 8px; font-size: .84rem; font-weight: 600; border: 1px solid transparent; }
+.chip.hit  { color: #86efac; background: rgba(34,197,94,.12);  border-color: rgba(34,197,94,.35);  box-shadow: 0 0 14px rgba(34,197,94,.12); }
+.chip.miss { color: #fca5a5; background: rgba(239,68,68,.12);  border-color: rgba(239,68,68,.35);  box-shadow: 0 0 14px rgba(239,68,68,.12); }
+.chip.none { color: var(--muted); background: rgba(255,255,255,.06); }
 
-[data-testid="stMetricValue"] { font-weight: 800; }
-</style>
+/* Metrics, callout, tabs, expanders */
+[data-testid="stMetric"] { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); border-radius: 14px; padding: .8rem 1rem; }
+[data-testid="stMetricLabel"] { color: var(--muted); }
+[data-testid="stMetricValue"] { font-family: 'Space Grotesk', sans-serif; font-weight: 700; }
+.callout {
+    border-left: 3px solid var(--violet); border-radius: 10px; padding: .8rem 1.1rem; margin: .8rem 0 1.1rem;
+    background: linear-gradient(90deg, rgba(139,92,246,.16), rgba(139,92,246,.02));
+}
+.stTabs [data-baseweb="tab"] { font-weight: 800; }
+[data-testid="stExpander"] details { background: rgba(255,255,255,.035); border: 1px solid var(--line); border-radius: 14px; }
+[data-testid="stExpander"] details:hover { border-color: rgba(139,92,246,.45); }
+
+/* Empty state */
+.empty {
+    border: 1.5px dashed rgba(167,139,250,.35); border-radius: 18px; padding: 2.2rem 1.6rem; margin-top: 1.6rem; text-align: center;
+    background: radial-gradient(500px 200px at 50% 0%, rgba(139,92,246,.12), transparent 70%);
+}
+.empty > b { font-family: 'Space Grotesk', sans-serif; font-size: 1.2rem; }
+.empty > p { color: var(--muted); margin: .45rem auto 0; max-width: 56ch; }
+.steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: .9rem; margin-top: 1.4rem; text-align: left; }
+.step { padding: 1rem 1.1rem; border-radius: 14px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); }
+.step b { display: flex; align-items: center; gap: .6rem; margin-bottom: .35rem; }
+.step span { color: var(--muted); font-size: .88rem; }
+.foot { margin-top: 2.5rem; text-align: center; color: var(--muted); font-size: .82rem; }
+
+@keyframes fill  { from { --p: 0; } to { --p: var(--t); } }
+@keyframes rise  { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(34,211,238,.6); } 70% { box-shadow: 0 0 0 9px rgba(34,211,238,0); } 100% { box-shadow: 0 0 0 0 rgba(34,211,238,0); } }
+@media (prefers-reduced-motion: reduce) { *, *::before { animation: none !important; transition: none !important; } }
 """
+
+
+def build_css() -> str:
+    # Cards fade in one after another
+    stagger = "".join(f".st-key-cand_{n} {{ animation-delay: {n * 0.07:.2f}s; }}\n" for n in range(1, 13))
+    return CSS_BASE + stagger + "</style>"
+
+
+CSS = build_css()
 
 
 def chips(items: list[str], kind: str, empty_text: str) -> str:
@@ -327,8 +465,8 @@ def render_inputs() -> tuple[str, int, list]:
     """Draw the form. Returns (job_text, minimum_experience, uploaded_files)."""
     left, right = st.columns([3, 2], gap="large")
 
-    with left, st.container(border=True):
-        st.markdown('<p class="section-title">Job description</p>', unsafe_allow_html=True)
+    with left, st.container(key="job_panel"):
+        st.markdown('<div class="panel-title"><span class="num">1</span>Job description</div>', unsafe_allow_html=True)
         st.markdown(
             '<p class="section-hint">The more specific the skills, the better the ranking.</p>',
             unsafe_allow_html=True,
@@ -338,8 +476,8 @@ def render_inputs() -> tuple[str, int, list]:
         quals = st.text_area("Qualifications", placeholder="B.Tech in Computer Science", height=90, max_chars=2000)
         min_exp = st.number_input("Minimum experience (years)", min_value=0, max_value=50, value=0)
 
-    with right, st.container(border=True):
-        st.markdown('<p class="section-title">Resumes</p>', unsafe_allow_html=True)
+    with right, st.container(key="upload_panel"):
+        st.markdown('<div class="panel-title"><span class="num">2</span>Resumes</div>', unsafe_allow_html=True)
         st.markdown(
             f'<p class="section-hint">PDF only. Up to {MAX_FILES} files, {MAX_FILE_MB} MB each.</p>',
             unsafe_allow_html=True,
@@ -402,6 +540,19 @@ def run_ranking(job_text: str, files: list) -> dict | None:
     return {"candidates": candidates, "skills_detected": skills_detected}
 
 
+def results_table(candidates: list[Candidate]) -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "Rank": range(1, len(candidates) + 1),
+            "Candidate": [c.name for c in candidates],
+            "Score": [round(c.score, 1) for c in candidates],
+            "Skill match %": [round(c.skill_score, 1) for c in candidates],
+            "Text similarity %": [round(c.text_score, 1) for c in candidates],
+            "Experience (yrs)": [c.experience for c in candidates],
+        }
+    )
+
+
 def render_summary(candidates: list[Candidate], min_exp: int) -> None:
     meets = sum(c.experience >= min_exp for c in candidates)
     average = sum(c.score for c in candidates) / len(candidates)
@@ -412,16 +563,15 @@ def render_summary(candidates: list[Candidate], min_exp: int) -> None:
     cols[2].metric("Average score", f"{average:.0f}%")
     cols[3].metric("Meet experience", f"{meets} of {len(candidates)}")
 
-    table = pd.DataFrame(
-        {
-            "Rank": range(1, len(candidates) + 1),
-            "Candidate": [c.name for c in candidates],
-            "Score": [round(c.score, 1) for c in candidates],
-            "Skill match %": [round(c.skill_score, 1) for c in candidates],
-            "Text similarity %": [round(c.text_score, 1) for c in candidates],
-            "Experience (yrs)": [c.experience for c in candidates],
-        }
+    shortlist = sum(c.score >= SHORTLIST_SCORE and c.experience >= min_exp for c in candidates)
+    requirement = f" and have {min_exp}+ years of experience" if min_exp else ""
+    st.markdown(
+        f'<div class="callout"><b>{shortlist} of {len(candidates)}</b> candidates score '
+        f"{SHORTLIST_SCORE}% or higher{requirement}.</div>",
+        unsafe_allow_html=True,
     )
+
+    table = results_table(candidates)
     # Filenames are user-controlled: neutralise formulas in the exported copy only
     csv_table = table.assign(Candidate=table["Candidate"].map(csv_safe))
 
@@ -441,52 +591,86 @@ def render_summary(candidates: list[Candidate], min_exp: int) -> None:
     )
 
 
+def render_candidate_details(c: Candidate, min_exp: int, skills_detected: bool) -> None:
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Skill match", f"{c.skill_score:.0f}%" if skills_detected else "n/a")
+    m2.metric("Text similarity", f"{c.text_score:.0f}%")
+    m3.metric("Experience found", f"{c.experience} yrs")
+
+    if c.experience >= min_exp:
+        kind, text = "hit", f"Meets the {min_exp}+ year requirement"
+    else:
+        kind, text = "miss", f"Below the {min_exp}+ year requirement (found {c.experience})"
+    st.markdown(f'<span class="chip {kind}">{escape(text)}</span>', unsafe_allow_html=True)
+
+    if skills_detected:
+        st.markdown(
+            '<div class="chips-label">Skills found</div>' + chips(c.matched, "hit", "No required skills found"),
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            '<div class="chips-label">Skills missing</div>' + chips(c.missing, "miss", "Nothing missing"),
+            unsafe_allow_html=True,
+        )
+        st.caption(
+            f"Score = {SKILL_WEIGHT:.0%} × skill match ({c.skill_score:.1f}%) "
+            f"+ {TEXT_WEIGHT:.0%} × text similarity ({c.text_score:.1f}%) = {c.score:.1f}%"
+        )
+    else:
+        st.caption(f"No known skills in the job description, so the score is text similarity alone: {c.score:.1f}%")
+
+
 def render_candidate(rank: int, c: Candidate, min_exp: int, skills_detected: bool) -> None:
+    """Full card with the animated score ring. Used for the top candidates."""
     label, colour = verdict_for(c.score)
     pct = round(c.score)
+    medal = f" r{rank}" if rank <= 3 else ""
+    badge = '<span class="badge">TOP RANKED</span>' if rank == 1 else ""
 
-    with st.container(border=True):
+    # Key gives the container a stable CSS class (st-key-cand_<rank>) for the glass styling
+    with st.container(key=f"cand_{rank}"):
         st.markdown(
             f'<div class="cand">'
-            f'<div class="ring-wrap" role="img" aria-label="Score {pct} percent">'
-            f'<div class="ring" style="--p:{min(pct, 100)};--c:{colour}"></div><b>{pct}%</b></div>'
-            f'<div><div class="cand-rank">Rank {rank}</div>'
+            f'<div class="ring-wrap" style="--t:{min(pct, 100)};--c:{colour}" role="img" aria-label="Score {pct} percent">'
+            f'<div class="ring"></div><b>{pct}<small>%</small></b></div>'
+            f'<div class="cand-info"><div class="cand-rank">'
+            f'<span class="rank-badge{medal}">{rank}</span>Rank {rank}{badge}</div>'
             f'<div class="cand-name">{escape(c.name)}</div>'
             f'<span class="pill" style="--c:{colour}">{label}</span></div></div>',
             unsafe_allow_html=True,
         )
+        render_candidate_details(c, min_exp, skills_detected)
 
-        m1, m2, m3 = st.columns(3)
-        m1.metric("Skill match", f"{c.skill_score:.0f}%" if skills_detected else "n/a")
-        m2.metric("Text similarity", f"{c.text_score:.0f}%")
-        m3.metric("Experience found", f"{c.experience} yrs")
 
-        if c.experience >= min_exp:
-            kind, text = "hit", f"Meets the {min_exp}+ year requirement"
-        else:
-            kind, text = "miss", f"Below the {min_exp}+ year requirement (found {c.experience})"
-        st.markdown(f'<span class="chip {kind}">{escape(text)}</span>', unsafe_allow_html=True)
+def render_candidates(candidates: list[Candidate], min_exp: int, skills_detected: bool) -> None:
+    f1, f2, f3 = st.columns([2, 3, 4], gap="large", vertical_alignment="bottom")
+    sort_by = f1.selectbox("Sort by", list(SORTS))
+    min_score = f2.slider("Minimum score", 0, 100, 0, format="%d%%")
+    only_meeting = f3.toggle("Only candidates who meet the experience requirement")
 
-        if skills_detected:
-            st.markdown(
-                '<div class="chips-label">Skills found</div>'
-                + chips(c.matched, "hit", "No required skills found"),
-                unsafe_allow_html=True,
-            )
-            st.markdown(
-                '<div class="chips-label">Skills missing</div>'
-                + chips(c.missing, "miss", "Nothing missing"),
-                unsafe_allow_html=True,
-            )
+    # Rank always means rank by score, whatever the current sort order
+    shown = [
+        (rank, c)
+        for rank, c in enumerate(candidates, 1)
+        if c.score >= min_score and (not only_meeting or c.experience >= min_exp)
+    ]
+    shown.sort(key=lambda rc: SORTS[sort_by](rc[1]), reverse=True)
 
-        with st.expander("How this score is calculated"):
-            if skills_detected:
-                st.write(
-                    f"Skill match {c.skill_score:.1f}% × {SKILL_WEIGHT} + "
-                    f"text similarity {c.text_score:.1f}% × {TEXT_WEIGHT:.1f} = **{c.score:.1f}%**"
-                )
-            else:
-                st.write(f"No known skills in the job description, so the score is text similarity alone: **{c.score:.1f}%**")
+    if not shown:
+        st.info("No candidates match these filters. Lower the minimum score or turn off the experience filter.")
+        return
+
+    st.caption(f"Showing {len(shown)} of {len(candidates)} candidates")
+    for rank, c in shown[:TOP_CARDS]:
+        render_candidate(rank, c, min_exp, skills_detected)
+
+    rest = shown[TOP_CARDS:]
+    if rest:
+        st.markdown(f"#### More candidates ({len(rest)})")
+        for rank, c in rest:
+            _, colour = verdict_for(c.score)
+            with st.expander(f"{DOTS[colour]} #{rank} {md_escape(c.name)}: {round(c.score)}%"):
+                render_candidate_details(c, min_exp, skills_detected)
 
 
 def render_results(state: dict, min_exp: int) -> None:
@@ -503,12 +687,37 @@ def render_results(state: dict, min_exp: int) -> None:
             "so candidates are ranked by text similarity only."
         )
 
-    render_summary(candidates, min_exp)
+    overview, details = st.tabs(["Overview", "Candidates"])
+    with overview:
+        render_summary(candidates, min_exp)
+    with details:
+        render_candidates(candidates, min_exp, skills_detected)
 
-    st.write("")
-    st.markdown("### Candidate details")
-    for rank, candidate in enumerate(candidates, 1):
-        render_candidate(rank, candidate, min_exp, skills_detected)
+
+def render_empty_state() -> None:
+    st.markdown(
+        '<div class="empty"><b>No results yet</b>'
+        "<p>Candidates are ordered by how many required skills they have and how closely "
+        "their resume reads like the job description.</p>"
+        '<div class="steps">'
+        '<div class="step"><b><span class="num">1</span>Describe the role</b>'
+        "<span>Add a title and the skills you need.</span></div>"
+        '<div class="step"><b><span class="num">2</span>Upload resumes</b>'
+        "<span>PDF files, up to " + str(MAX_FILES) + " at a time.</span></div>"
+        '<div class="step"><b><span class="num">3</span>Review the ranking</b>'
+        "<span>Filter, sort and export the results.</span></div>"
+        "</div></div>",
+        unsafe_allow_html=True,
+    )
+
+
+def hero_html(status: str) -> str:
+    return (
+        f'<div class="hero"><span class="eyebrow"><span class="dot"></span>{escape(status)}</span>'
+        '<div class="hero-title">Resume screening</div>'
+        '<p class="hero-sub">Describe the role, upload resumes as PDFs, and get '
+        "candidates ranked by how well they match.</p></div>"
+    )
 
 
 # ----------------------------------------------------------------------------
@@ -518,23 +727,39 @@ def main() -> None:
     st.set_page_config(page_title="Resume Screening", page_icon="📄", layout="wide")
     st.markdown(CSS, unsafe_allow_html=True)
 
-    st.markdown('<p class="app-title">Resume screening</p>', unsafe_allow_html=True)
-    st.markdown(
-        '<p class="app-sub">Describe the role, upload resumes as PDFs, and get '
-        "candidates ranked by how well they match.</p>",
-        unsafe_allow_html=True,
-    )
+    hero = st.empty()  # filled in at the end, once we know the status
 
     job_text, min_exp, files = render_inputs()
 
+    needs = []
+    if not job_text.strip():
+        needs.append("job details")
+    if not files:
+        needs.append("at least one resume")
+
     st.write("")
-    if st.button("Rank candidates", type="primary"):
+    clicked = st.button("Rank candidates", type="primary", disabled=bool(needs))
+    if needs:
+        st.caption(f"Add {' and '.join(needs)} to continue.")
+
+    if clicked:
         bundle = run_ranking(job_text, files)
         # Keep results in session state so they survive reruns (e.g. the CSV download)
         st.session_state["results"] = bundle
 
-    if st.session_state.get("results"):
-        render_results(st.session_state["results"], min_exp)
+    results = st.session_state.get("results")
+    if results:
+        render_results(results, min_exp)
+        status = f"{len(results['candidates'])} resumes ranked"
+    else:
+        render_empty_state()
+        status = f"{len(files)} resumes loaded" if files else "Ready"
+
+    hero.markdown(hero_html(status), unsafe_allow_html=True)
+    st.markdown(
+        f'<div class="foot">Score = {SKILL_WEIGHT:.0%} skill match + {TEXT_WEIGHT:.0%} text similarity.</div>',
+        unsafe_allow_html=True,
+    )
 
 
 if __name__ == "__main__":
