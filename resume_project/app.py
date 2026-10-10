@@ -104,6 +104,9 @@ VERDICTS = [
     (0, "Low match", "#f87171"),
 ]
 
+# Deeper variants of the verdict colours for the light theme
+LIGHT_TONE = {"#22c55e": "#15803d", "#2dd4bf": "#0f766e", "#60a5fa": "#1d4ed8", "#fbbf24": "#b45309", "#f87171": "#b91c1c"}
+
 # Verdict colour -> dot used where only text fits (expander labels)
 DOTS = {"#22c55e": "🟢", "#2dd4bf": "🟢", "#60a5fa": "🔵", "#fbbf24": "🟠", "#f87171": "🔴"}
 
@@ -265,11 +268,30 @@ def score_candidates(job_clean: str, resumes: dict[str, str]) -> tuple[list[Cand
 # ----------------------------------------------------------------------------
 # Styling
 # ----------------------------------------------------------------------------
+# Colours that differ between themes are written as light-dark(<light>, <dark>). The browser
+# resolves them from the colour-scheme Streamlit sets on .stApp, so the page follows the
+# Streamlit theme (Settings menu or system setting) instantly, with no Python-side detection.
 CSS_BASE = """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&family=Space+Grotesk:wght@500;700&display=swap');
 
-:root { --muted: rgba(230,232,245,.62); --line: rgba(255,255,255,.09); --violet: #8b5cf6; --cyan: #22d3ee; }
+.stApp {
+    --muted:      light-dark(rgba(27,29,54,.62), rgba(230,232,245,.62));
+    --line:       light-dark(rgba(124,58,237,.16), rgba(255,255,255,.09));
+    --soft:       light-dark(rgba(27,29,54,.06), rgba(255,255,255,.07));
+    --violet:     light-dark(#7c3aed, #8b5cf6);
+    --cyan:       light-dark(#0891b2, #22d3ee);
+    --panel-a:    light-dark(rgba(255,255,255,.90), rgba(255,255,255,.06));
+    --panel-b:    light-dark(rgba(255,255,255,.60), rgba(255,255,255,.02));
+    --shadow:     light-dark(rgba(76,29,149,.10), rgba(0,0,0,.35));
+    --hover-line: light-dark(rgba(124,58,237,.45), rgba(139,92,246,.50));
+    --hover-glow: light-dark(rgba(124,58,237,.18), rgba(139,92,246,.18));
+    --tile:       light-dark(rgba(255,255,255,.80), rgba(255,255,255,.04));
+    --tile-line:  light-dark(rgba(124,58,237,.14), rgba(255,255,255,.08));
+    --track:      light-dark(rgba(27,29,54,.10), rgba(255,255,255,.10));
+    --grid:       light-dark(rgba(80,70,160,.07), rgba(255,255,255,.035));
+    --tint:       light-dark(rgba(124,58,237,.12), rgba(139,92,246,.16));
+}
 
 html, body, .stApp, [class*="css"], .stMarkdown, label, button { font-family: 'Manrope', system-ui, sans-serif; }
 h2, h3, h4 { font-family: 'Space Grotesk', 'Manrope', sans-serif; letter-spacing: -0.02em; }
@@ -277,56 +299,59 @@ h2, h3, h4 { font-family: 'Space Grotesk', 'Manrope', sans-serif; letter-spacing
 /* Backdrop: soft glows plus a faint grid that fades out down the page */
 .stApp {
     background:
-        radial-gradient(900px 520px at 10% -8%, rgba(139,92,246,.24), transparent 60%),
-        radial-gradient(800px 480px at 98% 0%, rgba(34,211,238,.14), transparent 55%),
-        #0b0d17;
+        radial-gradient(900px 520px at 10% -8%, light-dark(rgba(167,139,250,.42), rgba(139,92,246,.24)), transparent 60%),
+        radial-gradient(800px 480px at 98% 0%, light-dark(rgba(125,211,252,.42), rgba(34,211,238,.14)), transparent 55%),
+        radial-gradient(800px 520px at 50% 108%, light-dark(rgba(253,186,116,.30), transparent), transparent 60%),
+        light-dark(#f6f5ff, #0b0d17);
 }
 .stApp::before {
     content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0;
     background-image:
-        linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px);
+        linear-gradient(var(--grid) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid) 1px, transparent 1px);
     background-size: 48px 48px;
     -webkit-mask-image: radial-gradient(ellipse at 50% 0%, #000 15%, transparent 72%);
             mask-image: radial-gradient(ellipse at 50% 0%, #000 15%, transparent 72%);
 }
 [data-testid="stHeader"] { background: transparent; }
-#MainMenu, footer, [data-testid="stDecoration"] { display: none; }
+footer, [data-testid="stDecoration"] { display: none; }   /* the main menu stays: it holds the theme switch */
 .block-container { max-width: 1120px; padding-top: 2rem; padding-bottom: 4rem; position: relative; z-index: 1; }
 
 /* Hero */
 .hero { padding: 1.2rem 0 1.6rem; }
 .eyebrow {
     display: inline-flex; align-items: center; gap: .55rem; padding: .28rem .8rem;
-    border: 1px solid rgba(167,139,250,.35); border-radius: 999px; background: rgba(139,92,246,.1);
-    font-size: .76rem; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: #c4b5fd;
+    border: 1px solid light-dark(rgba(124,58,237,.32), rgba(167,139,250,.35)); border-radius: 999px;
+    background: light-dark(rgba(124,58,237,.10), rgba(139,92,246,.10));
+    font-size: .76rem; font-weight: 700; letter-spacing: .07em; text-transform: uppercase;
+    color: light-dark(#6d28d9, #c4b5fd);
 }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--cyan); animation: pulse 2s infinite; }
 .hero-title {
     font-family: 'Space Grotesk', sans-serif; font-weight: 700; letter-spacing: -.03em; line-height: 1.04;
     font-size: clamp(2.3rem, 5.2vw, 3.5rem); margin: .9rem 0 .7rem;
-    background: linear-gradient(92deg, #fff 8%, #c4b5fd 45%, #67e8f9 92%);
+    background: linear-gradient(92deg, light-dark(#4c1d95, #fff) 8%, light-dark(#7c3aed, #c4b5fd) 45%, light-dark(#0891b2, #67e8f9) 92%);
     -webkit-background-clip: text; background-clip: text; color: transparent;
 }
 .hero-sub { color: var(--muted); max-width: 56ch; font-size: 1.05rem; margin: 0; }
 
 /* Glass panels (containers are given keys in the Python code) */
 .st-key-job_panel, .st-key-upload_panel, [class*="st-key-cand_"] {
-    background: linear-gradient(160deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
+    background: linear-gradient(160deg, var(--panel-a), var(--panel-b));
     border: 1px solid var(--line); border-radius: 18px; padding: 1.3rem 1.4rem;
     -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
-    box-shadow: 0 12px 40px rgba(0,0,0,.35);
+    box-shadow: 0 12px 40px var(--shadow);
     transition: border-color .25s, box-shadow .25s, transform .25s;
 }
 .st-key-job_panel:hover, .st-key-upload_panel:hover, [class*="st-key-cand_"]:hover {
-    border-color: rgba(139,92,246,.5);
-    box-shadow: 0 0 0 1px rgba(139,92,246,.22), 0 16px 48px rgba(139,92,246,.18);
+    border-color: var(--hover-line);
+    box-shadow: 0 0 0 1px var(--hover-glow), 0 16px 48px var(--hover-glow);
     transform: translateY(-2px);
 }
 .st-key-cand_1 {
-    border-color: rgba(139,92,246,.6);
-    background: linear-gradient(160deg, rgba(139,92,246,.16), rgba(34,211,238,.05) 60%, rgba(255,255,255,.02));
-    box-shadow: 0 0 60px rgba(139,92,246,.2), 0 12px 40px rgba(0,0,0,.35);
+    border-color: light-dark(rgba(124,58,237,.55), rgba(139,92,246,.60));
+    background: linear-gradient(160deg, var(--tint), light-dark(rgba(8,145,178,.06), rgba(34,211,238,.05)) 60%, light-dark(rgba(255,255,255,.65), rgba(255,255,255,.02)));
+    box-shadow: 0 0 60px var(--hover-glow), 0 12px 40px var(--shadow);
 }
 [class*="st-key-cand_"] { animation: rise .6s cubic-bezier(.2,.8,.2,1) backwards; }
 
@@ -339,27 +364,32 @@ h2, h3, h4 { font-family: 'Space Grotesk', 'Manrope', sans-serif; letter-spacing
 
 /* Inputs */
 [data-baseweb="input"]:focus-within, [data-baseweb="textarea"]:focus-within {
-    box-shadow: 0 0 0 1px var(--violet), 0 0 18px rgba(139,92,246,.35);
+    box-shadow: 0 0 0 1px var(--violet), 0 0 18px var(--hover-glow);
 }
 [data-testid="stFileUploaderDropzone"] {
-    background: rgba(255,255,255,.03); border: 1.5px dashed rgba(167,139,250,.45);
+    background: light-dark(rgba(255,255,255,.60), rgba(255,255,255,.03));
+    border: 1.5px dashed light-dark(rgba(124,58,237,.45), rgba(167,139,250,.45));
     border-radius: 14px; transition: border-color .25s, background .25s;
 }
-[data-testid="stFileUploaderDropzone"]:hover { border-color: var(--cyan); background: rgba(34,211,238,.05); }
+[data-testid="stFileUploaderDropzone"]:hover { border-color: var(--cyan); background: light-dark(rgba(8,145,178,.06), rgba(34,211,238,.05)); }
 
 /* Buttons */
-.stButton, [data-testid="stElementContainer"]:has(> .stButton) { width: 100%; }
-.stButton button[kind="primary"], .stButton button[data-testid="stBaseButton-primary"] {
+.stButton, [data-testid="stFormSubmitButton"],
+[data-testid="stElementContainer"]:has(> .stButton),
+[data-testid="stElementContainer"]:has([data-testid="stFormSubmitButton"]),
+[data-testid="stElementContainer"]:has([data-testid="stFormSubmitButton"]) > div { width: 100%; }
+:is(.stButton, [data-testid="stFormSubmitButton"]) button:is([kind="primary"], [kind="primaryFormSubmit"], [data-testid="stBaseButton-primary"], [data-testid="stBaseButton-primaryFormSubmit"]) {
     width: 100%; color: #fff !important; border: 0; font-weight: 800; letter-spacing: .01em;
     padding: .85rem 1rem; border-radius: 12px;
     background: linear-gradient(95deg, #7c3aed, #06b6d4);
     box-shadow: 0 8px 30px rgba(124,58,237,.35);
     transition: transform .2s, box-shadow .2s, filter .2s;
 }
-.stButton button[kind="primary"]:hover:not(:disabled), .stButton button[data-testid="stBaseButton-primary"]:hover:not(:disabled) {
+.stButton button:is([kind="primary"], [data-testid="stBaseButton-primary"]):hover:not(:disabled),
+[data-testid="stFormSubmitButton"] button:is([kind="primaryFormSubmit"], [data-testid="stBaseButton-primaryFormSubmit"]):hover:not(:disabled) {
     transform: translateY(-1px); filter: brightness(1.1); box-shadow: 0 12px 38px rgba(34,211,238,.35);
 }
-.stButton button:disabled { opacity: .5; filter: saturate(.35); box-shadow: none; }
+:is(.stButton, [data-testid="stFormSubmitButton"]) button:disabled { opacity: .5; filter: saturate(.35); box-shadow: none; }
 
 /* Candidate header */
 .cand { display: flex; align-items: center; gap: 1.2rem; margin-bottom: .9rem; flex-wrap: wrap; }
@@ -370,18 +400,20 @@ h2, h3, h4 { font-family: 'Space Grotesk', 'Manrope', sans-serif; letter-spacing
 .rank-badge {
     display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%;
     font-size: .8rem; font-weight: 800; color: var(--muted); letter-spacing: 0;
-    background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.14);
+    background: var(--soft); border: 1px solid light-dark(rgba(27,29,54,.15), rgba(255,255,255,.14));
 }
 .rank-badge.r1 { color: #1c1303; border: 0; background: linear-gradient(135deg, #fde68a, #f59e0b); box-shadow: 0 0 16px rgba(245,158,11,.5); }
-.rank-badge.r2 { color: #111827; border: 0; background: linear-gradient(135deg, #f3f4f6, #9ca3af); box-shadow: 0 0 14px rgba(209,213,219,.3); }
+.rank-badge.r2 { color: #111827; border: 0; background: linear-gradient(135deg, #f3f4f6, #9ca3af); box-shadow: 0 0 14px rgba(156,163,175,.45); }
 .rank-badge.r3 { color: #1f1108; border: 0; background: linear-gradient(135deg, #fdba74, #c2410c); box-shadow: 0 0 14px rgba(234,88,12,.35); }
 
-/* Score ring: masked conic gradient, animates from 0 to the score */
+/* Score ring: masked conic gradient, animates from 0 to the score.
+   Verdict colour is passed as a light and a dark variant (--cl / --cd). */
 @property --p { syntax: '<number>'; inherits: false; initial-value: 0; }
-.ring-wrap { position: relative; width: 88px; height: 88px; flex: none; filter: drop-shadow(0 0 8px color-mix(in srgb, var(--c) 55%, transparent)); }
+.ring-wrap, .pill { --c: light-dark(var(--cl), var(--cd)); }
+.ring-wrap { position: relative; width: 88px; height: 88px; flex: none; filter: drop-shadow(0 0 8px color-mix(in srgb, var(--c) 45%, transparent)); }
 .ring {
     --w: 9px; --p: var(--t); position: absolute; inset: 0; border-radius: 50%;
-    background: conic-gradient(var(--c) calc(var(--p) * 1%), rgba(255,255,255,.1) 0);
+    background: conic-gradient(var(--c) calc(var(--p) * 1%), var(--track) 0);
     -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - var(--w)), #000 calc(100% - var(--w) + 1px));
             mask: radial-gradient(farthest-side, transparent calc(100% - var(--w)), #000 calc(100% - var(--w) + 1px));
     animation: fill 1.3s cubic-bezier(.2,.8,.2,1) backwards;
@@ -403,31 +435,38 @@ h2, h3, h4 { font-family: 'Space Grotesk', 'Manrope', sans-serif; letter-spacing
 /* Skill chips */
 .chips-label { font-size: .8rem; font-weight: 800; margin: 1rem 0 .4rem; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
 .chip { display: inline-block; padding: .22rem .7rem; margin: 0 .4rem .4rem 0; border-radius: 8px; font-size: .84rem; font-weight: 600; border: 1px solid transparent; }
-.chip.hit  { color: #86efac; background: rgba(34,197,94,.12);  border-color: rgba(34,197,94,.35);  box-shadow: 0 0 14px rgba(34,197,94,.12); }
-.chip.miss { color: #fca5a5; background: rgba(239,68,68,.12);  border-color: rgba(239,68,68,.35);  box-shadow: 0 0 14px rgba(239,68,68,.12); }
-.chip.none { color: var(--muted); background: rgba(255,255,255,.06); }
+.chip.hit  {
+    color: light-dark(#166534, #86efac); background: light-dark(rgba(34,197,94,.14), rgba(34,197,94,.12));
+    border-color: light-dark(rgba(22,163,74,.40), rgba(34,197,94,.35)); box-shadow: 0 0 14px light-dark(transparent, rgba(34,197,94,.12));
+}
+.chip.miss {
+    color: light-dark(#991b1b, #fca5a5); background: rgba(239,68,68,.12);
+    border-color: light-dark(rgba(220,38,38,.35), rgba(239,68,68,.35)); box-shadow: 0 0 14px light-dark(transparent, rgba(239,68,68,.12));
+}
+.chip.none { color: var(--muted); background: var(--soft); }
 
 /* Metrics, callout, tabs, expanders */
-[data-testid="stMetric"] { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); border-radius: 14px; padding: .8rem 1rem; }
+[data-testid="stMetric"] { background: var(--tile); border: 1px solid var(--tile-line); border-radius: 14px; padding: .8rem 1rem; }
 [data-testid="stMetricLabel"] { color: var(--muted); }
 [data-testid="stMetricValue"] { font-family: 'Space Grotesk', sans-serif; font-weight: 700; }
 .callout {
     border-left: 3px solid var(--violet); border-radius: 10px; padding: .8rem 1.1rem; margin: .8rem 0 1.1rem;
-    background: linear-gradient(90deg, rgba(139,92,246,.16), rgba(139,92,246,.02));
+    background: linear-gradient(90deg, var(--tint), transparent);
 }
 .stTabs [data-baseweb="tab"] { font-weight: 800; }
-[data-testid="stExpander"] details { background: rgba(255,255,255,.035); border: 1px solid var(--line); border-radius: 14px; }
-[data-testid="stExpander"] details:hover { border-color: rgba(139,92,246,.45); }
+[data-testid="stExpander"] details { background: light-dark(rgba(255,255,255,.65), rgba(255,255,255,.035)); border: 1px solid var(--line); border-radius: 14px; }
+[data-testid="stExpander"] details:hover { border-color: var(--hover-line); }
 
 /* Empty state */
 .empty {
-    border: 1.5px dashed rgba(167,139,250,.35); border-radius: 18px; padding: 2.2rem 1.6rem; margin-top: 1.6rem; text-align: center;
-    background: radial-gradient(500px 200px at 50% 0%, rgba(139,92,246,.12), transparent 70%);
+    border: 1.5px dashed light-dark(rgba(124,58,237,.35), rgba(167,139,250,.35)); border-radius: 18px;
+    padding: 2.2rem 1.6rem; margin-top: 1.6rem; text-align: center;
+    background: radial-gradient(500px 200px at 50% 0%, var(--tint), transparent 70%);
 }
 .empty > b { font-family: 'Space Grotesk', sans-serif; font-size: 1.2rem; }
 .empty > p { color: var(--muted); margin: .45rem auto 0; max-width: 56ch; }
 .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: .9rem; margin-top: 1.4rem; text-align: left; }
-.step { padding: 1rem 1.1rem; border-radius: 14px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); }
+.step { padding: 1rem 1.1rem; border-radius: 14px; background: var(--tile); border: 1px solid var(--tile-line); }
 .step b { display: flex; align-items: center; gap: .6rem; margin-bottom: .35rem; }
 .step span { color: var(--muted); font-size: .88rem; }
 .foot { margin-top: 2.5rem; text-align: center; color: var(--muted); font-size: .82rem; }
@@ -461,35 +500,38 @@ def chips(items: list[str], kind: str, empty_text: str) -> str:
 # ----------------------------------------------------------------------------
 # UI sections
 # ----------------------------------------------------------------------------
-def render_inputs() -> tuple[str, int, list]:
-    """Draw the form. Returns (job_text, minimum_experience, uploaded_files)."""
-    left, right = st.columns([3, 2], gap="large")
+def render_inputs() -> tuple[str, list, bool]:
+    """Draw the input form. Returns (job_text, uploaded_files, submitted).
 
-    with left, st.container(key="job_panel"):
-        st.markdown('<div class="panel-title"><span class="num">1</span>Job description</div>', unsafe_allow_html=True)
-        st.markdown(
-            '<p class="section-hint">The more specific the skills, the better the ranking.</p>',
-            unsafe_allow_html=True,
-        )
-        role = st.text_input("Job role", placeholder="e.g. Data Analyst", max_chars=100)
-        skills = st.text_area("Required skills", placeholder="Python, SQL, Machine Learning, AWS", height=90, max_chars=2000)
-        quals = st.text_area("Qualifications", placeholder="B.Tech in Computer Science", height=90, max_chars=2000)
-        min_exp = st.number_input("Minimum experience (years)", min_value=0, max_value=50, value=0)
+    Everything is inside st.form, so Streamlit re-runs the script only when
+    "Rank candidates" is pressed, not after each field.
+    """
+    with st.form("job_form", border=False):
+        left, right = st.columns([3, 2], gap="large")
 
-    with right, st.container(key="upload_panel"):
-        st.markdown('<div class="panel-title"><span class="num">2</span>Resumes</div>', unsafe_allow_html=True)
-        st.markdown(
-            f'<p class="section-hint">PDF only. Up to {MAX_FILES} files, {MAX_FILE_MB} MB each.</p>',
-            unsafe_allow_html=True,
-        )
-        files = st.file_uploader(
-            "Upload resumes", type=["pdf"], accept_multiple_files=True, label_visibility="collapsed"
-        )
-        if files:
-            st.caption(f"{len(files)} resume(s) ready")
+        with left, st.container(key="job_panel"):
+            st.markdown('<div class="panel-title"><span class="num">1</span>Job description</div>', unsafe_allow_html=True)
+            st.markdown(
+                '<p class="section-hint">The more specific the skills, the better the ranking.</p>',
+                unsafe_allow_html=True,
+            )
+            role = st.text_input("Job role", placeholder="e.g. Data Analyst", max_chars=100)
+            skills = st.text_area("Required skills", placeholder="Python, SQL, Machine Learning, AWS", height=90, max_chars=2000)
+            quals = st.text_area("Qualifications", placeholder="B.Tech in Computer Science", height=90, max_chars=2000)
 
-    job_text = f"{role}\n{skills}\n{quals}"
-    return job_text, int(min_exp), files or []
+        with right, st.container(key="upload_panel"):
+            st.markdown('<div class="panel-title"><span class="num">2</span>Resumes</div>', unsafe_allow_html=True)
+            st.markdown(
+                f'<p class="section-hint">PDF only. Up to {MAX_FILES} files, {MAX_FILE_MB} MB each.</p>',
+                unsafe_allow_html=True,
+            )
+            files = st.file_uploader(
+                "Upload resumes", type=["pdf"], accept_multiple_files=True, label_visibility="collapsed"
+            )
+
+        submitted = st.form_submit_button("Rank candidates", type="primary")
+
+    return f"{role}\n{skills}\n{quals}", files or [], submitted
 
 
 def run_ranking(job_text: str, files: list) -> dict | None:
@@ -631,12 +673,12 @@ def render_candidate(rank: int, c: Candidate, min_exp: int, skills_detected: boo
     with st.container(key=f"cand_{rank}"):
         st.markdown(
             f'<div class="cand">'
-            f'<div class="ring-wrap" style="--t:{min(pct, 100)};--c:{colour}" role="img" aria-label="Score {pct} percent">'
+            f'<div class="ring-wrap" style="--t:{min(pct, 100)};--cd:{colour};--cl:{LIGHT_TONE[colour]}" role="img" aria-label="Score {pct} percent">'
             f'<div class="ring"></div><b>{pct}<small>%</small></b></div>'
             f'<div class="cand-info"><div class="cand-rank">'
             f'<span class="rank-badge{medal}">{rank}</span>Rank {rank}{badge}</div>'
             f'<div class="cand-name">{escape(c.name)}</div>'
-            f'<span class="pill" style="--c:{colour}">{label}</span></div></div>',
+            f'<span class="pill" style="--cd:{colour};--cl:{LIGHT_TONE[colour]}">{label}</span></div></div>',
             unsafe_allow_html=True,
         )
         render_candidate_details(c, min_exp, skills_detected)
@@ -673,9 +715,9 @@ def render_candidates(candidates: list[Candidate], min_exp: int, skills_detected
                 render_candidate_details(c, min_exp, skills_detected)
 
 
-def render_results(state: dict, min_exp: int) -> None:
-    """Draw saved results. min_exp is the *current* form value: the experience check is
-    a display comparison, so it updates live without re-ranking."""
+def render_results(state: dict) -> None:
+    """Draw saved results. The experience requirement is read here, outside the form: it is
+    only a display comparison, so it updates live without re-ranking."""
     candidates: list[Candidate] = state["candidates"]
     skills_detected: bool = state["skills_detected"]
 
@@ -686,6 +728,12 @@ def render_results(state: dict, min_exp: int) -> None:
             "None of the skills in the job description are in the known skills list, "
             "so candidates are ranked by text similarity only."
         )
+
+    box, _ = st.columns([1, 3])
+    min_exp = int(box.number_input(
+        "Minimum experience (years)", min_value=0, max_value=50, value=0, key="min_exp",
+        help="Flags candidates below this. It doesn't change their scores.",
+    ))
 
     overview, details = st.tabs(["Overview", "Candidates"])
     with overview:
@@ -729,27 +777,15 @@ def main() -> None:
 
     hero = st.empty()  # filled in at the end, once we know the status
 
-    job_text, min_exp, files = render_inputs()
+    job_text, files, submitted = render_inputs()
 
-    needs = []
-    if not job_text.strip():
-        needs.append("job details")
-    if not files:
-        needs.append("at least one resume")
-
-    st.write("")
-    clicked = st.button("Rank candidates", type="primary", disabled=bool(needs))
-    if needs:
-        st.caption(f"Add {' and '.join(needs)} to continue.")
-
-    if clicked:
-        bundle = run_ranking(job_text, files)
+    if submitted:
         # Keep results in session state so they survive reruns (e.g. the CSV download)
-        st.session_state["results"] = bundle
+        st.session_state["results"] = run_ranking(job_text, files)
 
     results = st.session_state.get("results")
     if results:
-        render_results(results, min_exp)
+        render_results(results)
         status = f"{len(results['candidates'])} resumes ranked"
     else:
         render_empty_state()
